@@ -5,18 +5,18 @@
 This inventory script expects a specific file layout representing the Ansible inventory. All files and directory live under the `datadir`. Host and Groups are group by environment. All groups and hosts data files are named after the group or host and must be valid JSON.
 
 ```
-├── inventory
-│   └── production
-│       ├── groups
-│       │   ├── 5points.json
-│       │   ├── all.json
-│       │   ├── atlanta.json
-│       │   ├── databases.json
-│       │   ├── marietta.json
-│       │   └── webservers.json
-│       └── hosts
-│           ├── llama.example.com.json
-│           └── moocow.example.com.json
+inventory
+└── production
+    ├── groups
+    │   ├── 5points.json
+    │   ├── all.json
+    │   ├── atlanta.json
+    │   ├── databases.json
+    │   ├── marietta.json
+    │   └── webservers.json
+    └── hosts
+        ├── llama.example.com.json
+        └── moocow.example.com.json
 ```
 
 ### Group files
