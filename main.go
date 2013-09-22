@@ -58,14 +58,14 @@ func main() {
 	//
 	inventory := make(map[string]interface{})
 
-	groupPaths, err := ioutil.ReadDir(groupDir)
-	if err != nil {
+	// Ansible supports setting default group vars via a special group
+	// named "all". We do something similar here.
+	if err := setDefaultVars(); err != nil {
 		log.Fatal(err.Error())
 	}
 
-	// Ansible supports setting default group vars for all groups via
-	// the all group. We do something similar here.
-	if err := setDefaultVars(); err != nil {
+	groupPaths, err := ioutil.ReadDir(groupDir)
+	if err != nil {
 		log.Fatal(err.Error())
 	}
 
