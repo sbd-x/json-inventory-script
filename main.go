@@ -78,7 +78,7 @@ func main() {
 		var g Group
 		groupMap := make(map[string]interface{})
 		groupVars := make(map[string]interface{})
-		name := trimExt(group.Name())
+		name := trimExt(group.Name(), ".json")
 
 		if defaultVars != nil {
 			for k, v := range defaultVars {
@@ -125,7 +125,7 @@ func main() {
 		if len(hostVars) == 0 {
 			continue
 		}
-		hostvars[trimExt(host.Name())] = hostVars
+		hostvars[trimExt(host.Name(), ".json")] = hostVars
 	}
 	inventory["_meta"] = meta
 
@@ -192,8 +192,9 @@ func isFileExist(fpath string) bool {
 	return true
 }
 
-func trimExt(s string) string {
-	// check if we have the extension, if not return
-	// the input string.
-	return s[0 : len(s)-len(".json")]
+func trimExt(s, ext string) string {
+	if filepath.Ext(s) != ext {
+		return s
+	}
+	return s[0 : len(s)-len(ext)]
 }
