@@ -54,14 +54,20 @@ type Host struct {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatal("--list or --host flag required.\n")
+	}
+
 	// Ansible versions prior to 1.3 will call this inventory script once
 	// for every host in the group defined by the playbook being executed.
 	// In this case we simply output the variables for the host identified
 	// by the --host flag, and exit.
-	if len(os.Args) == 3 {
-		if os.Args[1] == "--host" {
-			printHostVarsAndExit()
-		}
+	if len(os.Args) == 3 && os.Args[1] == "--host" {
+		printHostVarsAndExit()
+	}
+
+	if len(os.Args) != 2 || os.Args[1] != "--list" {
+		log.Fatal("Unknown flag or arugument")
 	}
 
 	inventory := make(map[string]interface{})
