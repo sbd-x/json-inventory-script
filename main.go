@@ -1,3 +1,7 @@
+// Copyright (c) 2013 Kelsey Hightower. All rights reserved.
+// Use of this source code is governed by the Apache License, Version 2.0
+// that can be found in the LICENSE file.
+//
 // This inventory script is compatable with all versions of Ansible
 // including support for the "_meta" section used by Ansible 1.3. This
 // script also supports returning data for a single host will called
