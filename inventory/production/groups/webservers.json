@@ -1,0 +1,6 @@
+{
+  "hosts": [
+    "host2.example.com",
+    "host3.example.com"
+  ]
+}
