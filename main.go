@@ -4,7 +4,7 @@
 //
 // This inventory script is compatable with all versions of Ansible
 // including support for the "_meta" section used by Ansible 1.3. This
-// script also supports returning data for a single host will called
+// script also supports returning data for a single host when called
 // with the --host flag.
 //
 // This script prints to STDOUT a valid Ansible inventory. For example:
