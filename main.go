@@ -11,60 +11,59 @@ import (
 
 var dataDir = "inventory"
 var environment = "production"
-var groupDir = filepath.Join(dataDir, environment, "groups")
-var hostDir = filepath.Join(dataDir, environment, "hosts")
 
-type Inventory struct {
-	Name   string
-	Groups []Group
-	Hosts  []Host
-	Meta   map[string]interface{}
+type Config struct {
+	GroupDir string
+	HostDir  string
 }
 
 type Group struct {
 	name  string
-	Hosts []string               `json:"hosts"`
-	Vars  map[string]interface{} `json:"vars"`
+	Hosts []string
+	Vars  map[string]interface{}
 }
-
 type Host struct {
 	name string
 	Vars map[string]interface{}
 }
 
 func main() {
+	var c Config
+	c.GroupDir = filepath.Join(dataDir, environment, "groups")
+	c.HostDir = filepath.Join(dataDir, environment, "hosts")
+
+	// Check if we are being called for a specific host.
 	if len(os.Args) == 3 {
 		if os.Args[1] == "--host" {
-			_, err := os.Stat(filepath.Join(hostDir, os.Args[2] + ".json"))
-			if os.IsNotExist(err) {
+			fpath := filepath.Join(c.HostDir, os.Args[2]+".json")
+			if isFileExist(fpath) {
+				hostVars, err := getHostVars(fpath)
+				if err != nil {
+					log.Fatal(err.Error())
+				}
+				data, err := json.MarshalIndent(hostVars, "", "  ")
+				if err != nil {
+					log.Fatal(err.Error())
+				}
+				fmt.Printf("%s\n", string(data))
+				os.Exit(0)
+			} else {
 				fmt.Print("{}\n")
 				os.Exit(0)
 			}
-
-			hostVars, err := getHostVars(os.Args[2] + ".json")
-			if err != nil {
-				log.Fatal(err.Error())
-			}
-
-			data, err := json.MarshalIndent(hostVars, "", "  ")
-			if err != nil {
-				log.Fatal(err.Error())
-			}
-			fmt.Printf("%s\n", string(data))
-
-			os.Exit(0)
 		}
 	}
 
-	m := make(map[string]interface{})
+	// Inventory
+	inventory := make(map[string]interface{})
 
-	groups, err := ioutil.ReadDir(groupDir)
+	groups, err := ioutil.ReadDir(c.GroupDir)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	var defaultGroup Group
-	data, err := ioutil.ReadFile(filepath.Join(groupDir, "all.json"))
+	data, err := ioutil.ReadFile(filepath.Join(c.GroupDir, "all.json"))
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -84,7 +83,7 @@ func main() {
 			destMap[k] = v
 		}
 
-		f, err := ioutil.ReadFile(filepath.Join(groupDir, group.Name()))
+		f, err := ioutil.ReadFile(filepath.Join(c.GroupDir, group.Name()))
 		if err != nil {
 			log.Fatal(err.Error())
 		}
@@ -109,20 +108,20 @@ func main() {
 		}
 		g.name = trimExt(group.Name())
 
-		m[g.name] = gMap
+		inventory[g.name] = gMap
 	}
 
 	meta := make(map[string]interface{})
 	hostvars := make(map[string]interface{})
 	meta["hostvars"] = hostvars
 
-	hosts, err := ioutil.ReadDir(hostDir)
+	hosts, err := ioutil.ReadDir(c.HostDir)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	for _, host := range hosts {
-		hostVars, err := getHostVars(host.Name())
+		hostVars, err := getHostVars(filepath.Join(c.HostDir, host.Name()))
 		if err != nil {
 			log.Fatal(err.Error())
 		}
@@ -133,24 +132,22 @@ func main() {
 		hostvars[trimExt(host.Name())] = hostVars
 	}
 
-	m["_meta"] = meta
-	output, err := json.MarshalIndent(m, "", "  ")
+	inventory["_meta"] = meta
+	output, err := json.MarshalIndent(inventory, "", "  ")
 	fmt.Printf(string(output))
 }
 
-func getHostVars(name string) (map[string]interface{}, error) {
+func getHostVars(fpath string) (map[string]interface{}, error) {
+	var h Host
 	m := make(map[string]interface{})
 
-	f, err := ioutil.ReadFile(filepath.Join(hostDir, name))
+	f, err := ioutil.ReadFile(fpath)
 	if err != nil {
 		return nil, err
 	}
-
-	var h Host
 	if err = json.Unmarshal(f, &h); err != nil {
 		return m, err
 	}
-
 	if h.Vars == nil {
 		return m, nil
 	} else {
@@ -158,6 +155,16 @@ func getHostVars(name string) (map[string]interface{}, error) {
 	}
 }
 
+func isFileExist(fpath string) bool {
+	_, err := os.Stat(fpath)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
 func trimExt(s string) string {
+	// check if we have the extension, if not return
+	// the input string.
 	return s[0 : len(s)-len(".json")]
 }
