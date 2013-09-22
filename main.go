@@ -1,3 +1,26 @@
+// This inventory script is compatable with all versions of Ansible
+// including support for the "_meta" section used by Ansible 1.3. This
+// script also supports returning data for a single host will called
+// with the --host flag.
+//
+// This script prints to STDOUT a valid Ansible inventory. For example:
+//
+//  {
+//    "_meta": {
+//      "hostvars": {
+//        "hostname": {
+//          "key": "value"
+//        }
+//      }
+//    },
+//    "group_name": {
+//      "hosts": ["host.example.com"],
+//      "vars": {
+//        "key": "value"
+//      }
+//    }
+//  }
+//
 package main
 
 import (
@@ -37,25 +60,6 @@ func main() {
 		}
 	}
 
-	// Ansible expects JSON on stdout representing the inventory, which
-	// should have the following format:
-	//
-	//  {
-	//    "_meta": {
-	//      "hostvars": {
-	//        "hostname": {
-	//          "key": "value"
-	//        }
-	//      }
-	//    },
-	//    "group_name": {
-	//      "hosts": ["host.example.com"],
-	//      "vars": {
-	//        "key": "value"
-	//      }
-	//    }
-	//  }
-	//
 	inventory := make(map[string]interface{})
 
 	// Ansible supports setting default group vars via a special group
@@ -83,7 +87,7 @@ func main() {
 		var g Group
 		groupMap := make(map[string]interface{})
 		groupVars := make(map[string]interface{})
-		name := trimExt(group.Name(), ".json")
+		groupName := trimExt(group.Name(), ".json")
 
 		if defaultVars != nil {
 			for k, v := range defaultVars {
@@ -103,12 +107,10 @@ func main() {
 				groupVars[k] = v
 			}
 		}
-
 		if len(groupVars) > 0 {
 			groupMap["vars"] = groupVars
 		}
-
-		inventory[name] = groupMap
+		inventory[groupName] = groupMap
 	}
 
 	// Add _meta section
