@@ -69,7 +69,9 @@ func main() {
 		log.Fatal(err.Error())
 	}
 
-	// Start building Group section
+	// This is where we start building the bulk of the Ansible inventory
+	// described above.  Since group vars are optional, we only add them
+	// to the output of the group if non-empty.
 	for _, group := range groupPaths {
 		if group.Name() == "all.json" {
 			continue
