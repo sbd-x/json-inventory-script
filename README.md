@@ -1,4 +1,4 @@
-# Ansible Inventory Script
+# JSON External Inventory Script
 
 ## Inventory Layout
 
