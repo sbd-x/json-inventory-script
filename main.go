@@ -117,7 +117,21 @@ func main() {
 		inventory[groupName] = groupMap
 	}
 
-	// Add _meta section
+	// Starting with Ansible 1.3, we can output a top level element named
+	// "_meta".  When "_meta" contains a value for "hostvars" we can return
+	// all host vars upfront and avoid additional calls to this inventory
+	// script for each host.
+	//
+	// The "_meta" section has the following output:
+	//
+	//  {
+	//    "_meta": {
+	//      "hostvars": {
+	//        "host.example.com": {"key": "value"}
+	//      }
+	//    }
+	//  }
+	//
 	meta := make(map[string]interface{})
 	hostvars := make(map[string]interface{})
 	meta["hostvars"] = hostvars
@@ -140,7 +154,7 @@ func main() {
 	}
 	inventory["_meta"] = meta
 
-	// Format inventory and print to stdout.
+	// Format the final inventory output and print to STDOUT.
 	output, err := json.MarshalIndent(inventory, "", "  ")
 	fmt.Printf(string(output))
 }
