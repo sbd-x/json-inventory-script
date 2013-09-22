@@ -9,119 +9,115 @@ import (
 	"path/filepath"
 )
 
-var dataDir = "inventory"
-var environment = "production"
-
-type Config struct {
-	GroupDir string
-	HostDir  string
-}
+var (
+	dataDir     = "inventory"
+	defaultVars map[string]interface{}
+	environment = "production"
+	groupDir    = filepath.Join(dataDir, environment, "groups")
+	hostDir     = filepath.Join(dataDir, environment, "hosts")
+)
 
 type Group struct {
-	name  string
 	Hosts []string
 	Vars  map[string]interface{}
 }
+
 type Host struct {
-	name string
 	Vars map[string]interface{}
 }
 
 func main() {
-	var c Config
-	c.GroupDir = filepath.Join(dataDir, environment, "groups")
-	c.HostDir = filepath.Join(dataDir, environment, "hosts")
-
-	// Check if we are being called for a specific host.
+	// Ansible versions prior to 1.3 will call this inventory script once
+	// for every host in the group defined by the playbook being executed.
+	// In this case we simply output the variables for the host identified
+	// by the --host flag, and exit.
 	if len(os.Args) == 3 {
 		if os.Args[1] == "--host" {
-			fpath := filepath.Join(c.HostDir, os.Args[2]+".json")
-			if isFileExist(fpath) {
-				hostVars, err := getHostVars(fpath)
-				if err != nil {
-					log.Fatal(err.Error())
-				}
-				data, err := json.MarshalIndent(hostVars, "", "  ")
-				if err != nil {
-					log.Fatal(err.Error())
-				}
-				fmt.Printf("%s\n", string(data))
-				os.Exit(0)
-			} else {
-				fmt.Print("{}\n")
-				os.Exit(0)
-			}
+			printHostVarsAndExit()
 		}
 	}
 
-	// Inventory
+	// Ansible expects JSON on stdout representing the inventory, which
+	// should have the following format:
+	//
+	//  {
+	//    "_meta": {
+	//      "hostvars": {
+	//        "hostname": {
+	//          "key": "value"
+	//        }
+	//      }
+	//    },
+	//    "group_name": {
+	//      "hosts": ["host.example.com"],
+	//      "vars": {
+	//        "key": "value"
+	//      }
+	//    }
+	//  }
+	//
 	inventory := make(map[string]interface{})
 
-	groups, err := ioutil.ReadDir(c.GroupDir)
+	groupPaths, err := ioutil.ReadDir(groupDir)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
-	var defaultGroup Group
-	data, err := ioutil.ReadFile(filepath.Join(c.GroupDir, "all.json"))
-	if err != nil {
+	// Ansible supports setting default group vars for all groups via
+	// the all group. We do something similar here.
+	if err := setDefaultVars(); err != nil {
 		log.Fatal(err.Error())
 	}
 
-	err = json.Unmarshal(data, &defaultGroup)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	for _, group := range groups {
+	// Start building Group section
+	for _, group := range groupPaths {
 		if group.Name() == "all.json" {
 			continue
 		}
 
-		destMap := make(map[string]interface{})
-		for k, v := range defaultGroup.Vars {
-			destMap[k] = v
-		}
-
-		f, err := ioutil.ReadFile(filepath.Join(c.GroupDir, group.Name()))
-		if err != nil {
-			log.Fatal(err.Error())
-		}
-
 		var g Group
-		err = json.Unmarshal(f, &g)
-		if err != nil {
-			log.Fatal(err.Error())
-		}
+		groupMap := make(map[string]interface{})
+		groupVars := make(map[string]interface{})
+		name := trimExt(group.Name())
 
-		gMap := make(map[string]interface{})
-		gMap["hosts"] = g.Hosts
-
-		if g.Vars != nil {
-			for k, v := range g.Vars {
-				destMap[k] = v
+		if defaultVars != nil {
+			for k, v := range defaultVars {
+				groupVars[k] = v
 			}
 		}
 
-		if len(destMap) > 0 {
-			gMap["vars"] = destMap
+		err = unmarshalFromFile(filepath.Join(groupDir, group.Name()), &g)
+		if err != nil {
+			log.Fatal(err.Error())
 		}
-		g.name = trimExt(group.Name())
 
-		inventory[g.name] = gMap
+		groupMap["hosts"] = g.Hosts
+
+		if g.Vars != nil {
+			for k, v := range g.Vars {
+				groupVars[k] = v
+			}
+		}
+
+		if len(groupVars) > 0 {
+			groupMap["vars"] = groupVars
+		}
+
+		inventory[name] = groupMap
 	}
 
+	// Add _meta section
 	meta := make(map[string]interface{})
 	hostvars := make(map[string]interface{})
 	meta["hostvars"] = hostvars
 
-	hosts, err := ioutil.ReadDir(c.HostDir)
+	hosts, err := ioutil.ReadDir(hostDir)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	for _, host := range hosts {
-		hostVars, err := getHostVars(filepath.Join(c.HostDir, host.Name()))
+		hostVars, err := getHostVars(filepath.Join(hostDir, host.Name()))
 		if err != nil {
 			log.Fatal(err.Error())
 		}
@@ -131,33 +127,66 @@ func main() {
 		}
 		hostvars[trimExt(host.Name())] = hostVars
 	}
-
 	inventory["_meta"] = meta
+
+	// Format inventory and print to stdout.
 	output, err := json.MarshalIndent(inventory, "", "  ")
 	fmt.Printf(string(output))
 }
 
-func getHostVars(fpath string) (map[string]interface{}, error) {
-	var h Host
-	m := make(map[string]interface{})
-
-	f, err := ioutil.ReadFile(fpath)
-	if err != nil {
-		return nil, err
-	}
-	if err = json.Unmarshal(f, &h); err != nil {
-		return m, err
-	}
-	if h.Vars == nil {
-		return m, nil
+func printHostVarsAndExit() {
+	fpath := filepath.Join(hostDir, os.Args[2]+".json")
+	if isFileExist(fpath) {
+		hostVars, err := getHostVars(fpath)
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		data, err := json.MarshalIndent(hostVars, "", "  ")
+		if err != nil {
+			log.Fatal(err.Error())
+		}
+		fmt.Printf("%s\n", string(data))
+		os.Exit(0)
 	} else {
-		return h.Vars, nil
+		fmt.Print("{}\n")
+		os.Exit(0)
 	}
 }
 
+func setDefaultVars() error {
+	var g Group
+	filePath := filepath.Join(groupDir, "all.json")
+	if isFileExist(filePath) {
+		err := unmarshalFromFile(filePath, &g)
+		if err != nil {
+			return err
+		}
+		defaultVars = g.Vars
+	}
+	return nil
+}
+
+func getHostVars(fpath string) (map[string]interface{}, error) {
+	var h Host
+	if err := unmarshalFromFile(fpath, &h); err != nil {
+		return nil, err
+	}
+	return h.Vars, nil
+}
+
+func unmarshalFromFile(fpath string, dest interface{}) error {
+	data, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(data, dest); err != nil {
+		return err
+	}
+	return nil
+}
+
 func isFileExist(fpath string) bool {
-	_, err := os.Stat(fpath)
-	if os.IsNotExist(err) {
+	if _, err := os.Stat(fpath); os.IsNotExist(err) {
 		return false
 	}
 	return true
