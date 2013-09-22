@@ -30,6 +30,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/kelseyhightower/go-ini"
 	"io/ioutil"
 	"log"
 	"os"
@@ -37,11 +38,11 @@ import (
 )
 
 var (
-	dataDir     = "inventory"
+	dataDir     string
 	defaultVars map[string]interface{}
-	environment = "production"
-	groupDir    = filepath.Join(dataDir, environment, "groups")
-	hostDir     = filepath.Join(dataDir, environment, "hosts")
+	environment string
+	groupDir    string
+	hostDir     string
 )
 
 type Group struct {
@@ -56,6 +57,10 @@ type Host struct {
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("--list or --host flag required.\n")
+	}
+
+	if err := setConfig(); err != nil {
+		log.Fatal(err.Error())
 	}
 
 	// Ansible versions prior to 1.3 will call this inventory script once
@@ -228,4 +233,39 @@ func trimExt(s, ext string) string {
 		return s
 	}
 	return s[0 : len(s)-len(ext)]
+}
+
+func setConfig() error {
+	// Set defaults
+	environment = "development"
+	dataDir = "/etc/ansible/inventory"
+
+	// Override defaults from config file.
+	if isFileExist("/etc/ansible/json.ini") {
+		settings, err := ini.LoadFile("/etc/ansible/json.ini")
+		if err != nil {
+			return nil
+		}
+
+		if envFromConf, ok := settings.Get("json", "environment"); ok {
+			environment = envFromConf
+		}
+		if dirFromConf, ok := settings.Get("json", "datadir"); ok {
+			dataDir = dirFromConf
+		}
+	}
+
+	// Override settings from environment variables
+	envFromEnv := os.Getenv("JSON_INVENTORY_ENVIRONMENT")
+	if envFromEnv != "" {
+		environment = envFromEnv
+	}
+	dirFromEnv := os.Getenv("JSON_INVENTORY_DATADIR")
+	if dirFromEnv != "" {
+		dataDir = dirFromEnv
+	}
+
+	hostDir = filepath.Join(dataDir, environment, "hosts")
+	groupDir = filepath.Join(dataDir, environment, "groups")
+	return nil
 }
